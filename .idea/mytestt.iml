@@ -5,9 +5,12 @@
       <sourceFolder url="file://$MODULE_DIR$/aaa" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/Egg_e_web" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/GD_Project" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/Egg_App_Spider" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/ZhuoChuang_WEB" isTestSource="false" />
+      <excludeFolder url="file://$MODULE_DIR$/v" />
       <excludeFolder url="file://$MODULE_DIR$/venv" />
     </content>
-    <orderEntry type="inheritedJdk" />
+    <orderEntry type="jdk" jdkName="Python 3.7 (mytestt)" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
   </component>
 </module>

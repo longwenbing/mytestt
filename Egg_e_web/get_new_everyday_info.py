@@ -1,36 +1,38 @@
 import csv
 import os
 import time
-import datetime
+from datetime import datetime
 
-import numpy
+import numpy as np
 import requests
 from lxml import etree
 import re
+
+from merge_data import save_csv
 
 
 class mycollector():
     def __init__(self):
         # 发起请求时使用的请求头
         self.headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/77.0.3865.120 Safari/537.36',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/77.0.3865.120 Safari/537.36'
         }
-        #全国蛋价早报
-        self.beginurl='http://bbs.eggworld.cn/forum-36-1.html'
-        #蛋E网的官网
-        self.website='http://bbs.eggworld.cn/'
+        # 全国蛋价早报
+        self.beginurl = 'http://bbs.eggworld.cn/forum-36-1.html'
+        # 蛋E网的官网
+        self.website = 'http://bbs.eggworld.cn/'
 
-        self.page='http://bbs.eggworld.cn/forum-36-%d.html'
+        self.page = 'http://bbs.eggworld.cn/forum-36-%d.html'
 
-        self.save_path='D://CSDY_data//蛋e网蛋价'
+        self.save_path = 'D://CSDY_data//蛋e网蛋价'
 
-        self.fieldnames=['城市','蛋种','销售方式','价格/元','单位/斤','趋势','其他信息']
-        #一页中的省份名
-        self.provinces=[]
-        #一页中的信息集合
-        self.content=[]
-        self.c=0
-        self.columns_number=[]
+        self.fieldnames = ['城市', '蛋种', '销售方式', '价格/元', '单位/斤', '趋势', '其他信息']
+        # 一页中的省份名
+        self.provinces = []
+        # 一页中的信息集合
+        self.content = []
+        self.c = 0
+        self.columns_number = []
 
     # 用于统一处理请求
     def request(self, url):
@@ -41,7 +43,7 @@ class mycollector():
                 # sleep(0.5)
                 print("request %s" % url)
                 r = requests.get(url, headers=self.headers, timeout=(30, 60))
-                #方便调试
+                # 方便调试
                 time.sleep(5)
                 return r
             # 处理异常
@@ -60,6 +62,7 @@ class mycollector():
             i += 1
             print('重试')
             if i == 3:
+                print("找不到 %s 的 %s"%(url,xpath))
                 exit(0)
             request = self.request(url)
         html = etree.HTML(request.content)
@@ -71,56 +74,62 @@ class mycollector():
         etree_htmls = self.get_xpath(url, '/html/body/div[6]/div[1]/div[4]/div/div/div[4]/div[2]/form/table/tbody')
         return etree_htmls
 
-
-    def handling_content(self,url,release_time):
-        texts = self.get_xpath(url,'//*[@class="t_f"]/text()')
+    def handling_content(self, url, release_time):
+        texts = self.get_xpath(url, '//*[@class="t_f"]/text()')
         # print(texts)
         # 处理文章内容
-        first_in=True
-
+        first_in = True
+        shandong_4_6flag=True
         for t in texts:
-            text=t.strip()
-            if text=='' or text==None:
+            text = t.strip()
+            if text == '' or text == None:
                 pass
             else:
                 # print(text)
                 # print('')
                 if '【' in t:
                     province = re.findall(r'【(.*?)】', text)[0]
-                    if release_time == '2020-2-21' and province == '湖北':
-                        pass
+                    # if release_time == '2020-2-21' and province == '湖北':
+                    #     pass
+                    # else:
+                    #     self.provinces.append(province)
+                    if release_time=='2020-4-6' and province=='山东' and shandong_4_6flag:
+                        shandong_4_6flag=False
                     else:
+                        #将每个省份写入列表
                         self.provinces.append(province)
                     if first_in or self.c == 0:
-                        first_in=False
+                        first_in = False
                     else:
+                        #记录省份下的数据条数
                         self.columns_number.append(self.c)
                         self.c = 0
                 else:
+                    #切分每条数据
                     message = self.split_content(text)
                     if message != None:
                         print(message)
+                        # 将切分后的数据写入列表
                         self.content.append(message)
                         self.c += 1
         self.columns_number.append(self.c)
-        self.c=0
+        self.c = 0
         # print(self.provinces.zip(self.columns_number),self.content)
         for i in range(len(self.provinces)):
             crruent_province = self.provinces[i]
             print(crruent_province)
-            number=self.columns_number[i]
+            number = self.columns_number[i]
             # print(self.provinces)
             # print(self.columns_number)
-            offest=0
+            offest = 0
             for x in range(i):
-                offest+=int(self.columns_number[x])
-            self.storage_infos(crruent_province,self.content,release_time,offest,number)
+                offest += int(self.columns_number[x])
+            self.storage_infos(crruent_province, self.content, release_time, offest, number, release_time)
             time.sleep(0.3)
-        self.content=[]
-        self.provinces=[]
-        self.columns_number=[]
+        self.content = []
+        self.provinces = []
+        self.columns_number = []
         time.sleep(0.3)
-        return self.provinces,self.content
 
     # 分割消息，并保存
     def split_content(self, text):
@@ -202,16 +211,37 @@ class mycollector():
         return unit
 
     # 保存数据
-    def storage_infos(self, provice, content, t, offset, number):
+    def storage_infos(self, provice, content, t, offset, number, release_time):
+        from merge_data import data2mysql
         self.check_dir(provice, t)
         list = []
         for i in range(offset, offset + number):
             list.append(content[i])
-        with open(self.save_path + '/' + provice + '/' + '%s.csv' % t, 'a', newline='') as file:
+        print(list)
+        #保存本地csv
+        with open(self.save_path + '/' + provice + '/' + '%s.csv' % t, 'w', newline='') as file:
             writer1 = csv.writer(file)
             writer1.writerows(list)
             file.close()
             print(self.save_path + '/' + provice + '%s.csv' % t + " 文件录入完成")
+        mysql_data=[]
+        for l in list:
+            array = np.array(l)
+            tolist = array.tolist()
+            tolist.insert(0, provice)
+            tolist.append(release_time)
+            np_array = np.array(tolist)
+            mysql_data.append(np_array)
+        print(mysql_data)
+        if mysql_data==[]:
+            pass
+        else:
+            #保存数据库
+            data2mysql(mysql_data)
+            #保存本地csv
+            save_csv(provice,mysql_data)
+
+
 
     # 检查文件是否存在
     def check_dir(self, provice, t):
@@ -236,52 +266,48 @@ class mycollector():
         else:
             return mes[0]
 
-    def get_new_tuples(self,day):
+    def get_new_tuples(self, day):
+        #02-02
         new_columns = self.get_columns(self.beginurl)
         hrefs = []
-        release_times=[]
+        release_times = []
         for new_column in new_columns:
-            #tr/td[4]/em/a/span
+            # tr/td[4]/em/a/span
             href = self.website + self.check_message(self.get_message(new_column, 'tr/th/a[2]/@href'))
             title = self.check_message(self.get_message(new_column, 'tr/th/a[2]/text()'))
-            #/html/body/div[6]/div[1]/div[4]/div/div/div[4]/div[2]/form/table/tbody[1]/tr/td[2]/em/span/span
-            release_time = self.check_message(self.get_message(new_column, 'tr/td[2]/em/span/span/@title'))
+            # /html/body/div[6]/div[1]/div[4]/div/div/div[4]/div[2]/form/table/tbody[1]/tr/td[2]/em/span/span
+            release_time_temp = self.check_message(self.get_message(new_column, 'tr/td[2]/em/span/span/@title'))
+            release_time=release_time_temp
+            if '-'in release_time_temp:
+                split = release_time_temp.split('-')
+                year =split[0]
+                m=split[1]
+                d=split[2]
+                if len(m)==1:
+                    m='0'+m
+                if len(d)==1:
+                    d='0'+d
+                release_time=year+'-'+m+'-'+d
             print(release_time)
             try:
-                m = release_time.split('-')[1]
-                if len(m)<2:
-                    year = release_time.split('-')[0]
-                    d = release_time.split('-')[2]
-                    m='0'+m
-                    if len(d)<2:
-                        d='0'+d
-                    release_time=year+'-'+m+'-'+d
-                print(release_time,day)
-                if day <=release_time:
-                        if '全国' in title:
-                            hrefs.append(href)
-                            release_times.append(day)
+                print(release_time, day)
+                # exit(0)
+                if day <= release_time:
+                    if '全国' in title:
+                        hrefs.append(href)
+                        release_times.append(day)
             except:
                 pass
-        return list(zip(hrefs,release_times))
+        return list(zip(hrefs, release_times))
 
     def run(self):
         today = time.strftime('%Y-%m-%d')
         tuple_list = self.get_new_tuples(today)
         print(tuple_list)
         for tuple in tuple_list:
-            content = self.handling_content(tuple[0], tuple[1])
-            print(content)
-
-
+            self.handling_content(tuple[0], tuple[1])
 
 
 if __name__ == '__main__':
     a = mycollector()
     a.run()
-
-
-
-
-
-
